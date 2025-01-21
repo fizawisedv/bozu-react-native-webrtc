@@ -98,6 +98,17 @@
     dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
 
     __weak VideoCaptureController *weakSelf = self;
+
+    if (self.vb) {
+        // ML Kit library requires kCVPixelFormatType_32BGRA format
+        for (AVCaptureOutput *output in _capturer.captureSession.outputs) {
+            RCTLog(@"Changing capturer output to %@", ((AVCaptureVideoDataOutput*)output).videoSettings);
+            if([output isKindOfClass:AVCaptureVideoDataOutput.class]) {
+                ((AVCaptureVideoDataOutput*)output).videoSettings = @{(NSString *)kCVPixelBufferPixelFormatTypeKey: [NSNumber numberWithUnsignedInt:kCVPixelFormatType_32BGRA]};
+            }
+        }
+    }
+
     [self.capturer startCaptureWithDevice:self.device
                                    format:format
                                       fps:self.frameRate
@@ -235,8 +246,13 @@
         return;
     }
 
-    device.activeVideoMinFrameDuration = CMTimeMake(1, 20);
-    device.activeVideoMaxFrameDuration = CMTimeMake(1, 15);
+    if (self.vb) {
+        device.activeVideoMinFrameDuration = CMTimeMake(1, 15);
+        device.activeVideoMaxFrameDuration = CMTimeMake(1, 12);
+    } else {
+        device.activeVideoMinFrameDuration = CMTimeMake(1, 20);
+        device.activeVideoMaxFrameDuration = CMTimeMake(1, 15);
+    }
 
     [device unlockForConfiguration];
 }
