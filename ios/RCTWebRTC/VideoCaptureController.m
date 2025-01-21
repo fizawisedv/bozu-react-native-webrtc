@@ -99,15 +99,15 @@
 
     __weak VideoCaptureController *weakSelf = self;
 
-    if (self.vb) {
-        // ML Kit library requires kCVPixelFormatType_32BGRA format
-        for (AVCaptureOutput *output in _capturer.captureSession.outputs) {
-            RCTLog(@"Changing capturer output to %@", ((AVCaptureVideoDataOutput*)output).videoSettings);
-            if([output isKindOfClass:AVCaptureVideoDataOutput.class]) {
-                ((AVCaptureVideoDataOutput*)output).videoSettings = @{(NSString *)kCVPixelBufferPixelFormatTypeKey: [NSNumber numberWithUnsignedInt:kCVPixelFormatType_32BGRA]};
-            }
-        }
-    }
+    // if (self.vb) {
+    //     // ML Kit library requires kCVPixelFormatType_32BGRA format
+    //     for (AVCaptureOutput *output in _capturer.captureSession.outputs) {
+    //         RCTLog(@"Changing capturer output to %@", ((AVCaptureVideoDataOutput*)output).videoSettings);
+    //         if([output isKindOfClass:AVCaptureVideoDataOutput.class]) {
+    //             ((AVCaptureVideoDataOutput*)output).videoSettings = @{(NSString *)kCVPixelBufferPixelFormatTypeKey: [NSNumber numberWithUnsignedInt:kCVPixelFormatType_32BGRA]};
+    //         }
+    //     }
+    // }
 
     [self.capturer startCaptureWithDevice:self.device
                                    format:format
@@ -117,6 +117,19 @@
                                 RCTLogError(@"[VideoCaptureController] Error starting capture: %@", err);
                             } else {
                                 RCTLog(@"[VideoCaptureController] Capture started");
+                                
+                                //yavuzcakir comment: https://github.com/react-native-webrtc/react-native-webrtc/issues/1397#issuecomment-1688154385
+                                if (self.vb) {
+                                    // ML Kit library requires kCVPixelFormatType_32BGRA format
+                                    for (AVCaptureOutput *output in _capturer.captureSession.outputs) {
+                                        RCTLog(@"Changing capturer output to %@", ((AVCaptureVideoDataOutput*)output).videoSettings);
+                                        if([output isKindOfClass:AVCaptureVideoDataOutput.class]) {
+                                            ((AVCaptureVideoDataOutput*)output).videoSettings = @{(NSString *)kCVPixelBufferPixelFormatTypeKey: [NSNumber numberWithUnsignedInt:kCVPixelFormatType_32BGRA]};
+                                        }
+                                    }
+                                }
+                                //end comment
+
                                 weakSelf.running = YES;
                             }
                             dispatch_semaphore_signal(semaphore);
