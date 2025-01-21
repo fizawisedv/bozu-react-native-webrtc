@@ -30,5 +30,6 @@ android {
 
 dependencies {
     implementation 'com.facebook.react:react-native:+'
+    implementation 'com.google.mlkit:segmentation-selfie:16.0.0-beta4'
     api 'org.jitsi:webrtc:118.+'
 }
