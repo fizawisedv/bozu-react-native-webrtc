@@ -355,6 +355,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 1A7E646283326F2A95C8C1FA /* Pods-RCTWebRTC.debug.xcconfig */;
 			buildSettings = {
+				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/../apple/AllHeaders";
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				OTHER_LDFLAGS = "-ObjC";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -366,6 +367,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 131131FC732883F1EF6F2CA3 /* Pods-RCTWebRTC.release.xcconfig */;
 			buildSettings = {
+				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/../apple/AllHeaders";
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				OTHER_LDFLAGS = "-ObjC";
 				PRODUCT_NAME = "$(TARGET_NAME)";

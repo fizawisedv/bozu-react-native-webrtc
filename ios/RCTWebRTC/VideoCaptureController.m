@@ -15,6 +15,7 @@
 @property(nonatomic, assign) int width;
 @property(nonatomic, assign) int height;
 @property(nonatomic, assign) int frameRate;
+@property(nonatomic, assign) BOOL vb;
 
 @end
 
@@ -33,6 +34,11 @@
         self.width = [constraints[@"width"] intValue];
         self.height = [constraints[@"height"] intValue];
         self.frameRate = [constraints[@"frameRate"] intValue];
+
+        //Rutime VB Start or Image Applay Set VB Always True
+        if(constraints[@"vb"]) {
+            self.vb = YES;
+        }
 
         id facingMode = constraints[@"facingMode"];
 

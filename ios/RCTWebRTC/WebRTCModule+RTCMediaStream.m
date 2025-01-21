@@ -113,7 +113,22 @@
     RTCVideoTrack *videoTrack = [self.peerConnectionFactory videoTrackWithSource:videoSource trackId:trackUUID];
 
 #if !TARGET_IPHONE_SIMULATOR
-    RTCCameraVideoCapturer *videoCapturer = [[RTCCameraVideoCapturer alloc] initWithDelegate:videoSource];
+    NSDictionary *videoContraints = constraints[@"video"];
+    RTCCameraVideoCapturer *videoCapturer;
+    
+    NSLog(@"Video constraint in create video track: %@", videoContraints);
+    
+    // If virtual backround is enabled, use video source interceptor before video source
+    if (videoContraints[@"vb"]) {
+        VideoSourceInterceptor *extractedExpr = [[VideoSourceInterceptor alloc]initWithVideoSource:videoSource
+                                                                                    andConstraints:videoContraints];
+        self.videoSourceInterceptor = extractedExpr;
+        videoCapturer = [[RTCCameraVideoCapturer alloc] initWithDelegate:self.videoSourceInterceptor];
+    }
+    else {
+        videoCapturer = [[RTCCameraVideoCapturer alloc] initWithDelegate:videoSource];
+    }
+    
     VideoCaptureController *videoCaptureController =
         [[VideoCaptureController alloc] initWithCapturer:videoCapturer andConstraints:constraints[@"video"]];
     videoTrack.captureController = videoCaptureController;
@@ -371,6 +386,38 @@ RCT_EXPORT_METHOD(mediaStreamTrackRelease : (nonnull NSString *)trackID) {
         [self.localTracks removeObjectForKey:trackID];
     }
 #endif
+}
+
+RCT_EXPORT_METHOD(mediaStreamTrackChangeVbStatus:(nonnull NSString *)trackID : (BOOL)status)
+{
+    RTCMediaStreamTrack *track = self.localTracks[trackID];
+    if (track && self.videoSourceInterceptor != nil) {
+        [self.videoSourceInterceptor changeVbStatus:status];
+    }
+}
+
+RCT_EXPORT_METHOD(mediaStreamTrackChangeVbImageUri:(nonnull NSString *)trackID : (NSString *)vbImageUri)
+{
+    RTCMediaStreamTrack *track = self.localTracks[trackID];
+    if (track && self.videoSourceInterceptor != nil) {
+        [self.videoSourceInterceptor changeVbImageUri:vbImageUri];
+    }
+}
+
+RCT_EXPORT_METHOD(mediaStreamTrackChangeVbFrameSkip:(nonnull NSString *)trackID : (NSInteger)vbFrameSkip)
+{
+    RTCMediaStreamTrack *track = self.localTracks[trackID];
+    if (track && self.videoSourceInterceptor != nil) {
+        [self.videoSourceInterceptor changeVbFrameSkip:vbFrameSkip];
+    }
+}
+
+RCT_EXPORT_METHOD(mediaStreamTrackChangeVbBlurValue:(nonnull NSString *)trackID : (NSInteger)blurValue)
+{
+    RTCMediaStreamTrack *track = self.localTracks[trackID];
+    if (track && self.videoSourceInterceptor != nil) {
+        [self.videoSourceInterceptor changeVbBlurValue:blurValue];
+    }
 }
 
 RCT_EXPORT_METHOD(mediaStreamTrackSetEnabled : (nonnull NSNumber *)pcId : (nonnull NSString *)trackID : (BOOL)enabled) {
