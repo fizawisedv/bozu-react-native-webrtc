@@ -1458,6 +1458,11 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
+    public void stopMediaProjectionForegroundService() {
+        getUserMediaImpl.stopMediaProjectionForegroundService();
+    }
+
+    @ReactMethod
     public void addListener(String eventName) {
         // Keep: Required for RN built in Event Emitter Calls.
     }

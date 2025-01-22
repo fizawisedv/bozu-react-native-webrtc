@@ -24,6 +24,7 @@ import RTCRtpTransceiver from './RTCRtpTransceiver';
 import RTCSessionDescription from './RTCSessionDescription';
 import RTCView from './RTCView';
 import ScreenCapturePickerView from './ScreenCapturePickerView';
+import { stopMediaProjectionForegroundService } from './getDisplayMedia';
 
 // Logger.enable(`${Logger.ROOT_PREFIX}:*`);
 
@@ -44,6 +45,7 @@ export {
     MediaStreamTrack,
     mediaDevices,
     permissions,
+    stopMediaProjectionForegroundService,
     registerGlobals
 };
 

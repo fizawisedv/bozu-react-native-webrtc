@@ -454,6 +454,10 @@ class GetUserMediaImpl {
         }
     }
 
+    void stopMediaProjectionForegroundService() {
+        MediaProjectionService.abort(reactContext);
+    }
+    
     /**
      * Application/library-specific private members of local
      * {@code MediaStreamTrack}s created by {@code GetUserMediaImpl}.

@@ -473,4 +473,8 @@ RCT_EXPORT_METHOD(mediaStreamTrackSetVolume : (nonnull NSNumber *)pcId : (nonnul
     return peerConnection.remoteTracks[trackId];
 }
 
+RCT_EXPORT_METHOD(stopMediaProjectionForegroundService) {
+    NSLog(@"not implemented");
+}
+
 @end
