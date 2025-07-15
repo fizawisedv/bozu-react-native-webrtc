@@ -4,7 +4,7 @@ import { NativeModules } from 'react-native';
 import { MediaTrackConstraints } from './Constraints';
 import { addListener, removeListener } from './EventEmitter';
 import Logger from './Logger';
-import { deepClone, normalizeConstraints } from './RTCUtil';
+import { assetFileToUri, deepClone, normalizeConstraints } from './RTCUtil';
 
 const log = new Logger('pc');
 const { WebRTCModule } = NativeModules;
