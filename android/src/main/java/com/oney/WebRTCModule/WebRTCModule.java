@@ -102,6 +102,9 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
                            .setVideoDecoderFactory(decoderFactory)
                            .createPeerConnectionFactory();
 
+        // PeerConnectionFactory now owns the adm native pointer, and we don't need it anymore.
+        adm.release();
+
         // Saving the encoder and decoder factories to get codec info later when needed.
         mVideoEncoderFactory = encoderFactory;
         mVideoDecoderFactory = decoderFactory;
@@ -114,14 +117,6 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
     @Override
     public String getName() {
         return "WebRTCModule";
-    }
-
-    @Override
-    public void onCatalystInstanceDestroy() {
-        if (mAudioDeviceModule != null) {
-            mAudioDeviceModule.release();
-        }
-        super.onCatalystInstanceDestroy();
     }
 
     private PeerConnection getPeerConnection(int id) {
@@ -927,11 +922,13 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void mediaStreamTrackSwitchCamera(String id) {
+    public void mediaStreamTrackApplyConstraints(String id, ReadableMap constraints, Promise promise) {
         ThreadUtils.runOnExecutor(() -> {
             MediaStreamTrack track = getLocalTrack(id);
             if (track != null) {
-                getUserMediaImpl.switchCamera(id);
+                getUserMediaImpl.applyConstraints(id, constraints, promise);
+            } else {
+                promise.reject(new Exception("mediaStreamTrackApplyConstraints() could not find track " + id));
             }
         });
     }
@@ -1315,16 +1312,16 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
                 return;
             }
 
-            if (!(candidateMap.hasKey("sdpMid") && candidateMap.hasKey("sdpMLineIndex")
-                        && candidateMap.hasKey("sdpMid"))) {
+            if (!candidateMap.hasKey("sdpMid") && !candidateMap.hasKey("sdpMLineIndex")) {
                 promise.reject("E_TYPE_ERROR", "Invalid argument");
                 return;
             }
 
-            IceCandidate candidate = new IceCandidate(candidateMap.getString("sdpMid"),
-                    candidateMap.getInt("sdpMLineIndex"),
-                    candidateMap.getString("candidate"));
-
+            IceCandidate candidate = new IceCandidate(
+                candidateMap.hasKey("sdpMid") && !candidateMap.isNull("sdpMid") ? candidateMap.getString("sdpMid")  : "",
+                candidateMap.hasKey("sdpMLineIndex") && !candidateMap.isNull("sdpMLineIndex")  ? candidateMap.getInt("sdpMLineIndex") : 0,
+                candidateMap.getString("candidate"));
+            
             peerConnection.addIceCandidate(candidate, new AddIceObserver() {
                 @Override
                 public void onAddSuccess() {

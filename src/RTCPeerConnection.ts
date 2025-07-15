@@ -332,18 +332,17 @@ export default class RTCPeerConnection extends EventTarget<RTCPeerConnectionEven
             return;
         }
 
-        if (
-            candidate.sdpMLineIndex === null ||
-            candidate.sdpMLineIndex === undefined ||
-            candidate.sdpMid === null ||
-            candidate.sdpMid === undefined
+        if ((candidate.sdpMLineIndex === null ||
+             candidate.sdpMLineIndex === undefined) &&
+            (candidate.sdpMid === null ||
+             candidate.sdpMid === undefined)
         ) {
-            throw new TypeError('`sdpMLineIndex` and `sdpMid` must not null or undefined');
+            throw new TypeError('`sdpMLineIndex` and `sdpMid` must not be both null or undefined');
         }
 
         const newSdp = await WebRTCModule.peerConnectionAddICECandidate(
             this._pcId,
-            candidate.toJSON ? candidate.toJSON() : candidate
+            RTCUtil.deepClone(candidate)
         );
 
         this.remoteDescription = new RTCSessionDescription(newSdp);
@@ -740,6 +739,10 @@ export default class RTCPeerConnection extends EventTarget<RTCPeerConnectionEven
      * instance such as id
      */
     createDataChannel(label: string, dataChannelDict?: RTCDataChannelInit): RTCDataChannel {
+        if (arguments.length === 0) {
+            throw new TypeError('1 argument required, but 0 present');
+        }
+
         if (dataChannelDict && 'id' in dataChannelDict) {
             const id = dataChannelDict.id;
 
@@ -748,7 +751,7 @@ export default class RTCPeerConnection extends EventTarget<RTCPeerConnectionEven
             }
         }
 
-        const channelInfo = WebRTCModule.createDataChannel(this._pcId, label, dataChannelDict);
+        const channelInfo = WebRTCModule.createDataChannel(this._pcId, String(label), dataChannelDict);
 
         if (channelInfo === null) {
             throw new TypeError('Failed to create new DataChannel');

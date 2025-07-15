@@ -1,10 +1,6 @@
 {
   "name": "react-native-webrtc",
-  "version": "118.0.7.1",
-  "_requested": {
-    "type": "git",
-    "url": "https://github.com/fizawisedv/bozu-react-native-webrtc.git"
-  },
+  "version": "124.0.5",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/fizawisedv/bozu-react-native-webrtc.git"
@@ -34,6 +30,7 @@
   },
   "scripts": {
     "lint": "eslint --max-warnings 0 . && tsc --noEmit",
+    "lintfix": "eslint --max-warnings 0 --fix . && tsc --noEmit",
     "prepare": "husky install && bob build",
     "format": "tools/format.sh"
   },
