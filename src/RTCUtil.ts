@@ -1,3 +1,4 @@
+import { Image } from "react-native";
 
 const DEFAULT_AUDIO_CONSTRAINTS = {};
 
@@ -200,5 +201,30 @@ export function normalizeConstraints(constraints) {
         }
     }
 
+    if (constraints['video'] && constraints['video'].hasOwnProperty('vb')) {
+        if (c['video']) {
+            c['video'].vb = true;
+        }
+    }
+    if (constraints['video'] && constraints['video'].hasOwnProperty('vbBackgroundImage')) {
+        if (c['video']) {
+            c['video'].vbBackgroundImage = assetFileToUri(constraints['video'].vbBackgroundImage);
+        }
+    }
+    if (constraints['video'] && constraints['video'].hasOwnProperty('vbFrameSkip')) {
+        if (c['video']) {
+            c['video'].vbFrameSkip = constraints['video'].vbFrameSkip;
+        }
+    }
+    if (constraints['video'] && constraints['video'].hasOwnProperty('vbBlurValue')) {
+        if (c['video']) {
+            c['video'].vbBlurValue = constraints['video'].vbBlurValue;
+        }
+    }
+
     return c;
+}
+
+export function assetFileToUri(imgRquire: any): string {
+    return Image.resolveAssetSource(imgRquire).uri;
 }

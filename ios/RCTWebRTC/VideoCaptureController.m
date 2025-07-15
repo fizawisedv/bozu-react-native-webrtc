@@ -14,6 +14,7 @@
 @property(nonatomic, assign) int width;
 @property(nonatomic, assign) int height;
 @property(nonatomic, assign) int frameRate;
+@property(nonatomic, assign) BOOL vb;
 
 @end
 
@@ -24,6 +25,7 @@
     if (self) {
         self.capturer = capturer;
         self.running = NO;
+
         [self applyConstraints:constraints error:nil];
     }
 
@@ -81,6 +83,17 @@
     dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
 
     __weak VideoCaptureController *weakSelf = self;
+
+    // if (self.vb) {
+    //     // ML Kit library requires kCVPixelFormatType_32BGRA format
+    //     for (AVCaptureOutput *output in _capturer.captureSession.outputs) {
+    //         RCTLog(@"Changing capturer output to %@", ((AVCaptureVideoDataOutput*)output).videoSettings);
+    //         if([output isKindOfClass:AVCaptureVideoDataOutput.class]) {
+    //             ((AVCaptureVideoDataOutput*)output).videoSettings = @{(NSString *)kCVPixelBufferPixelFormatTypeKey: [NSNumber numberWithUnsignedInt:kCVPixelFormatType_32BGRA]};
+    //         }
+    //     }
+    // }
+
     [self.capturer startCaptureWithDevice:self.device
                                    format:format
                                       fps:self.frameRate
@@ -89,6 +102,19 @@
                                 RCTLogError(@"[VideoCaptureController] Error starting capture: %@", err);
                             } else {
                                 RCTLog(@"[VideoCaptureController] Capture started");
+                                
+                                //yavuzcakir comment: https://github.com/react-native-webrtc/react-native-webrtc/issues/1397#issuecomment-1688154385
+                                if (self.vb) {
+                                    // ML Kit library requires kCVPixelFormatType_32BGRA format
+                                    for (AVCaptureOutput *output in _capturer.captureSession.outputs) {
+                                        RCTLog(@"Changing capturer output to %@", ((AVCaptureVideoDataOutput*)output).videoSettings);
+                                        if([output isKindOfClass:AVCaptureVideoDataOutput.class]) {
+                                            ((AVCaptureVideoDataOutput*)output).videoSettings = @{(NSString *)kCVPixelBufferPixelFormatTypeKey: [NSNumber numberWithUnsignedInt:kCVPixelFormatType_32BGRA]};
+                                        }
+                                    }
+                                }
+                                //end comment
+
                                 weakSelf.running = YES;
                             }
                             dispatch_semaphore_signal(semaphore);
@@ -141,6 +167,11 @@
     if (self.frameRate != frameRate) {
         hasChanged = YES;
         self.frameRate = frameRate;
+    }
+ 
+    //Rutime VB Start or Image Applay Set VB Always True
+    if(constraints[@"vb"]) {
+        self.vb = YES;
     }
 
     id facingMode = constraints[@"facingMode"];
@@ -295,8 +326,13 @@
         return;
     }
 
-    device.activeVideoMinFrameDuration = CMTimeMake(1, 20);
-    device.activeVideoMaxFrameDuration = CMTimeMake(1, 15);
+    if (self.vb) {
+        device.activeVideoMinFrameDuration = CMTimeMake(1, 15);
+        device.activeVideoMaxFrameDuration = CMTimeMake(1, 12);
+    } else {
+        device.activeVideoMinFrameDuration = CMTimeMake(1, 20);
+        device.activeVideoMaxFrameDuration = CMTimeMake(1, 15);
+    }
 
     [device unlockForConfiguration];
 }

@@ -26,8 +26,9 @@ import RTCRtpTransceiver from './RTCRtpTransceiver';
 import RTCSessionDescription from './RTCSessionDescription';
 import RTCView, { type RTCVideoViewProps, type RTCIOSPIPOptions } from './RTCView';
 import ScreenCapturePickerView from './ScreenCapturePickerView';
+import { stopMediaProjectionForegroundService } from './getDisplayMedia';
 
-Logger.enable(`${Logger.ROOT_PREFIX}:*`);
+// Logger.enable(`${Logger.ROOT_PREFIX}:*`);
 
 // Add listeners for the native events early, since they are added asynchronously.
 setupNativeEvents();
@@ -51,9 +52,10 @@ export {
     type RTCIOSPIPOptions,
     mediaDevices,
     permissions,
+    stopMediaProjectionForegroundService,
     registerGlobals,
     startIOSPIP,
-    stopIOSPIP,
+    stopIOSPIP
 };
 
 declare const global: any;

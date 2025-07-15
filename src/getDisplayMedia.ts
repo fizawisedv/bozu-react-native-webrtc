@@ -28,3 +28,7 @@ export default function getDisplayMedia(): Promise<MediaStream> {
         );
     });
 }
+
+export function stopMediaProjectionForegroundService() {
+    WebRTCModule.stopMediaProjectionForegroundService();
+}

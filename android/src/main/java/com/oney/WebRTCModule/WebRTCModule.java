@@ -443,12 +443,52 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
     }
 
     public VideoTrack createVideoTrack(AbstractVideoCaptureController videoCaptureController) {
-        return getUserMediaImpl.createVideoTrack(videoCaptureController);
+        return getUserMediaImpl.createVideoTrack(videoCaptureController, null);
     }
 
     public void createStream(
             MediaStreamTrack[] tracks, GetUserMediaImpl.BiConsumer<String, ArrayList<WritableMap>> successCallback) {
         getUserMediaImpl.createStream(tracks, successCallback);
+    }
+
+    @ReactMethod
+    public void mediaStreamTrackChangeVbStatus(String id, boolean status) {
+        ThreadUtils.runOnExecutor(() -> {
+            MediaStreamTrack track = getLocalTrack(id);
+            if (track != null) {
+                getUserMediaImpl.changeVBStatus(id, status);
+            }
+        });
+    }
+
+    @ReactMethod
+    public void mediaStreamTrackChangeVbImageUri(String id, String uri) {
+        ThreadUtils.runOnExecutor(() -> {
+            MediaStreamTrack track = getLocalTrack(id);
+            if (track != null) {
+                getUserMediaImpl.changeVbImageUri(id, uri);
+            }
+        });
+    }
+
+    @ReactMethod
+    public void mediaStreamTrackChangeVbBlurValue(String id, int blurValue) {
+        ThreadUtils.runOnExecutor(() -> {
+            MediaStreamTrack track = getLocalTrack(id);
+            if (track != null) {
+                getUserMediaImpl.changeVbBlurValue(id, blurValue);
+            }
+        });
+    }
+
+    @ReactMethod
+    public void mediaStreamTrackChangeVbFrameSkip(String id, int vbFrameSkip) {
+        ThreadUtils.runOnExecutor(() -> {
+            MediaStreamTrack track = getLocalTrack(id);
+            if (track != null) {
+                getUserMediaImpl.changeVbFrameSkip(id, vbFrameSkip);
+            }
+        });
     }
 
     /**
@@ -1412,6 +1452,11 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
 
             pco.dataChannelSend(reactTag, data, type);
         });
+    }
+
+    @ReactMethod
+    public void stopMediaProjectionForegroundService() {
+        getUserMediaImpl.stopMediaProjectionForegroundService();
     }
 
     @ReactMethod
