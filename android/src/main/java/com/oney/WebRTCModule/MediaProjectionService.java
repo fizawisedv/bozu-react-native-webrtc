@@ -11,6 +11,8 @@ import android.os.IBinder;
 import android.util.Log;
 
 import java.util.Random;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 
 /**
@@ -25,10 +27,15 @@ public class MediaProjectionService extends Service {
 
     static final int NOTIFICATION_ID = new Random().nextInt(99999) + 10000;
 
+    private static volatile CountDownLatch foregroundLatch;
+    private static final long FOREGROUND_WAIT_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(5);
+
     public static void launch(Context context) {
         if (!WebRTCModuleOptions.getInstance().enableMediaProjectionService) {
             return;
         }
+
+        foregroundLatch = new CountDownLatch(1);
 
         MediaProjectionNotification.createNotificationChannel(context);
         Intent intent = new Intent(context, MediaProjectionService.class);
@@ -44,6 +51,7 @@ public class MediaProjectionService extends Service {
             // Avoid crashing due to ForegroundServiceStartNotAllowedException (API level 31).
             // See: https://developer.android.com/guide/components/foreground-services#background-start-restrictions
             Log.w(TAG, "Media projection service not started", e);
+            foregroundLatch.countDown();
             return;
         }
 
@@ -51,6 +59,25 @@ public class MediaProjectionService extends Service {
             Log.w(TAG, "Media projection service not started");
         } else {
             Log.i(TAG, "Media projection service started");
+        }
+    }
+
+    public static boolean waitForForegroundReady() {
+        if (foregroundLatch == null) {
+            return true;
+        }
+        try {
+            boolean result = foregroundLatch.await(FOREGROUND_WAIT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            if (!result) {
+                Log.w(TAG, "Foreground service ready wait timed out");
+            }
+            return result;
+        } catch (InterruptedException e) {
+            Log.e(TAG, "Foreground service wait interrupted", e);
+            Thread.currentThread().interrupt();
+            return false;
+        } finally {
+            foregroundLatch = null;
         }
     }
 
@@ -77,6 +104,10 @@ public class MediaProjectionService extends Service {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
         } else {
             startForeground(NOTIFICATION_ID, notification);
+        }
+
+        if (foregroundLatch != null) {
+            foregroundLatch.countDown();
         }
 
         return START_NOT_STICKY;

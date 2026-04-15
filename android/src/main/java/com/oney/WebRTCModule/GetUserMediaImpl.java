@@ -76,6 +76,12 @@ class GetUserMediaImpl {
 
                     ThreadUtils.runOnExecutor(() -> {
                         MediaProjectionService.launch(activity);
+                        if (!MediaProjectionService.waitForForegroundReady()) {
+                            Log.e(TAG, "MediaProjectionService foreground not ready within timeout");
+                            displayMediaPromise.reject(new RuntimeException("MediaProjectionService foreground not ready"));
+                            displayMediaPromise = null;
+                            return;
+                        }
                         createScreenStream();
                     });
                 }

@@ -1,5 +1,7 @@
 package com.oney.WebRTCModule;
 
+import android.util.Log;
+
 import androidx.annotation.Nullable;
 import androidx.core.util.Consumer;
 
@@ -78,9 +80,7 @@ public abstract class AbstractVideoCaptureController {
         try {
             videoCapturer.startCapture(targetWidth, targetHeight, targetFps);
         } catch (RuntimeException e) {
-            // XXX This can only fail if we initialize the capturer incorrectly,
-            // which we don't. Thus, ignore any failures here since we trust
-            // ourselves.
+            Log.e("AbstractVideoCaptureController", "startCapture failed", e);
         }
     }
 
