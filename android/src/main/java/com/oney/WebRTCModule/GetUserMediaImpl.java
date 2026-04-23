@@ -4,8 +4,11 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.media.projection.MediaProjectionManager;
+import android.media.projection.MediaProjectionConfig;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.os.Build;
+
 import androidx.core.util.Consumer;
 
 import com.facebook.react.bridge.Arguments;
@@ -15,6 +18,7 @@ import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.bridge.ReadableType;
 import com.facebook.react.bridge.UiThreadUtil;
 import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
@@ -26,8 +30,11 @@ import org.webrtc.*;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * The implementation of {@code getUserMedia} extracted into a separate file in
@@ -55,6 +62,8 @@ class GetUserMediaImpl {
 
     private Promise displayMediaPromise;
     private Intent mediaProjectionPermissionResultData;
+    private boolean createConfigForDefaultDisplay = false;
+    private float resolutionScale = 1.0f;
 
     private  VirtualBackgroundVideoProcessor videoVbProcessor;
     GetUserMediaImpl(WebRTCModule webRTCModule, ReactApplicationContext reactContext) {
@@ -199,8 +208,14 @@ class GetUserMediaImpl {
 
             Log.d(TAG, "getUserMedia(video): " + videoConstraintsMap);
 
-            CameraCaptureController cameraCaptureController =
-                    new CameraCaptureController(reactContext.getCurrentActivity(), getCameraEnumerator(), videoConstraintsMap);
+            Activity currentActivity = this.reactContext.getCurrentActivity();
+            if (currentActivity == null) {
+                errorCallback.invoke("Error", "No current Activity.");
+                return;
+            }
+
+            CameraCaptureController cameraCaptureController = new CameraCaptureController(
+                    currentActivity, getCameraEnumerator(), videoConstraintsMap);
 
             videoTrack = createVideoTrack(cameraCaptureController, videoConstraintsMap);
         }
@@ -244,10 +259,11 @@ class GetUserMediaImpl {
     void applyConstraints(String trackId, ReadableMap constraints, Promise promise) {
         TrackPrivate track = tracks.get(trackId);
         if (track != null && track.videoCaptureController instanceof AbstractVideoCaptureController) {
-            AbstractVideoCaptureController captureController = (AbstractVideoCaptureController) track.videoCaptureController;
+            AbstractVideoCaptureController captureController =
+                    (AbstractVideoCaptureController) track.videoCaptureController;
             captureController.applyConstraints(constraints, new Consumer<Exception>() {
                 public void accept(Exception e) {
-                    if(e != null) {
+                    if (e != null) {
                         promise.reject(e);
                         return;
                     }
@@ -288,7 +304,41 @@ class GetUserMediaImpl {
         }
     }
 
-    void getDisplayMedia(Promise promise) {
+    void initializeConstraints(ReadableMap constraints) {
+
+        // Handle the incoming params
+
+        ReadableMap androidConstraints = null;
+        if (constraints.hasKey("android") && constraints.getType("android") == ReadableType.Map) {
+            androidConstraints = constraints.getMap("android");
+        }
+
+        // Default values
+        boolean createConfigForDefaultDisplay = false;
+        float scale = 1.0f;
+
+        if (androidConstraints != null) {
+            // MediaProjectionConfig need API level 34
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+                && androidConstraints.hasKey("createConfigForDefaultDisplay")
+                && androidConstraints.getType("createConfigForDefaultDisplay") == ReadableType.Boolean) {
+                createConfigForDefaultDisplay = androidConstraints.getBoolean("createConfigForDefaultDisplay");
+            }
+            if (androidConstraints.hasKey("resolutionScale")
+                && androidConstraints.getType("resolutionScale") == ReadableType.Number) {
+                scale = (float) androidConstraints.getDouble("resolutionScale");
+            }
+        }
+
+        this.createConfigForDefaultDisplay = createConfigForDefaultDisplay;
+        // Force the value in [0, 1]
+        this.resolutionScale = Math.max(0.0f, Math.min(1.0f, scale));
+
+        Log.d(TAG, "initializeConstraints: createConfigForDefaultDisplay=" + this.createConfigForDefaultDisplay
+            + " resolutionScale=" + this.resolutionScale);
+    }
+
+    void getDisplayMedia(final ReadableMap constraints, Promise promise) {
         if (this.displayMediaPromise != null) {
             promise.reject(new RuntimeException("Another operation is pending."));
             return;
@@ -300,6 +350,8 @@ class GetUserMediaImpl {
             return;
         }
 
+        this.initializeConstraints(constraints);
+
         this.displayMediaPromise = promise;
 
         MediaProjectionManager mediaProjectionManager =
@@ -310,8 +362,17 @@ class GetUserMediaImpl {
             UiThreadUtil.runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    currentActivity.startActivityForResult(
+
+                  if (createConfigForDefaultDisplay == true) {
+                        //MediaProjectionConfig need API level 34
+                        //Return mediaProjection which restricts the user to capturing the default display
+                        currentActivity.startActivityForResult(
+                            mediaProjectionManager.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay()), PERMISSION_REQUEST_CODE);
+                    } else {
+                        //Return mediaProjection which allows the user to decide which region is captured
+                        currentActivity.startActivityForResult(
                             mediaProjectionManager.createScreenCaptureIntent(), PERMISSION_REQUEST_CODE);
+                    }
                 }
             });
 
@@ -398,7 +459,7 @@ class GetUserMediaImpl {
         int width = displayMetrics.widthPixels;
         int height = displayMetrics.heightPixels;
         ScreenCaptureController screenCaptureController = new ScreenCaptureController(
-                reactContext.getCurrentActivity(), width, height, mediaProjectionPermissionResultData);
+                reactContext.getCurrentActivity(), width, height, mediaProjectionPermissionResultData, resolutionScale);
         return createVideoTrack(screenCaptureController, null);
     }
 
@@ -445,28 +506,35 @@ class GetUserMediaImpl {
     }
 
     /**
-     * Set video effect to the TrackPrivate corresponding to the trackId with the help of VideoEffectProcessor
-     * corresponding to the name.
+     * Set video effects to the TrackPrivate corresponding to the trackId with the help of VideoEffectProcessor
+     * corresponding to the names.
      * @param trackId TrackPrivate id
-     * @param name VideoEffectProcessor name
+     * @param names VideoEffectProcessor names
      */
-    void setVideoEffect(String trackId, String name) {
+    void setVideoEffects(String trackId, ReadableArray names) {
         TrackPrivate track = tracks.get(trackId);
 
         if (track != null && track.videoCaptureController instanceof CameraCaptureController) {
             VideoSource videoSource = (VideoSource) track.mediaSource;
             SurfaceTextureHelper surfaceTextureHelper = track.surfaceTextureHelper;
 
-            if (name != null) {
-                VideoFrameProcessor videoFrameProcessor = ProcessorProvider.getProcessor(name);
+            if (names != null) {
+                List<VideoFrameProcessor> processors =
+                        names.toArrayList()
+                                .stream()
+                                .filter(name -> name instanceof String)
+                                .map(name -> {
+                                    VideoFrameProcessor videoFrameProcessor =
+                                            ProcessorProvider.getProcessor((String) name);
+                                    if (videoFrameProcessor == null) {
+                                        Log.e(TAG, "no videoFrameProcessor associated with this name: " + name);
+                                    }
+                                    return videoFrameProcessor;
+                                })
+                                .filter(Objects::nonNull)
+                                .collect(Collectors.toList());
 
-                if (videoFrameProcessor == null) {
-                    Log.e(TAG, "no videoFrameProcessor associated with this name");
-                    return;
-                }
-
-                VideoEffectProcessor videoEffectProcessor =
-                        new VideoEffectProcessor(videoFrameProcessor, surfaceTextureHelper);
+                VideoEffectProcessor videoEffectProcessor = new VideoEffectProcessor(processors, surfaceTextureHelper);
                 videoSource.setVideoProcessor(videoEffectProcessor);
 
             } else {
@@ -549,5 +617,7 @@ class GetUserMediaImpl {
         }
     }
 
-    public interface BiConsumer<T, U> { void accept(T t, U u); }
+    public interface BiConsumer<T, U> {
+        void accept(T t, U u);
+    }
 }

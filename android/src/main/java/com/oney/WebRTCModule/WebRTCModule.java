@@ -24,6 +24,11 @@ import com.facebook.react.modules.core.DeviceEventManagerModule;
 import com.oney.WebRTCModule.webrtcutils.H264AndSoftwareVideoDecoderFactory;
 import com.oney.WebRTCModule.webrtcutils.H264AndSoftwareVideoEncoderFactory;
 
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 import org.webrtc.*;
 import org.webrtc.audio.AudioDeviceModule;
 import org.webrtc.audio.JavaAudioDeviceModule;
@@ -49,6 +54,9 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
     private final SparseArray<PeerConnectionObserver> mPeerConnectionObservers;
     final Map<String, MediaStream> localStreams;
 
+    // Store generated certificates by ID to avoid exposing private keys to JS
+    private static final Map<String, RtcCertificatePem> mCertificates = new HashMap<>();
+
     private final GetUserMediaImpl getUserMediaImpl;
 
     public WebRTCModule(ReactApplicationContext reactContext) {
@@ -67,10 +75,10 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
         String fieldTrials = options.fieldTrials;
 
         PeerConnectionFactory.initialize(PeerConnectionFactory.InitializationOptions.builder(reactContext)
-                                                 .setFieldTrials(fieldTrials)
-                                                 .setNativeLibraryLoader(new LibraryLoader())
-                                                 .setInjectableLogger(injectableLogger, loggingSeverity)
-                                                 .createInitializationOptions());
+                        .setFieldTrials(fieldTrials)
+                        .setNativeLibraryLoader(new LibraryLoader())
+                        .setInjectableLogger(injectableLogger, loggingSeverity)
+                        .createInitializationOptions());
 
         if (injectableLogger == null && loggingSeverity != null) {
             Logging.enableLogToDebugOutput(loggingSeverity);
@@ -254,7 +262,24 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
         }
 
         // FIXME: peerIdentity of type DOMString (public api)
-        // FIXME: certificates of type sequence<RTCCertificate> (public api)
+
+        // certificates (public api)
+        if (map.hasKey("certificates") && map.getType("certificates") == ReadableType.Array) {
+            ReadableArray certificates = map.getArray("certificates");
+            if (certificates.size() > 0) {
+                ReadableMap certMap = certificates.getMap(0);
+                if (certMap.hasKey("certificateId")) {
+                    String certId = certMap.getString("certificateId");
+                    RtcCertificatePem cert;
+                    synchronized (mCertificates) {
+                        cert = mCertificates.get(certId);
+                    }
+                    if (cert != null) {
+                        conf.certificate = cert;
+                    }
+                }
+            }
+        }
 
         // iceCandidatePoolSize of type unsigned short, defaulting to 0
         if (map.hasKey("iceCandidatePoolSize") && map.getType("iceCandidatePoolSize") == ReadableType.Number) {
@@ -395,33 +420,23 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
         }
     }
 
+    // Must be called in the executor.
     MediaStream getStreamForReactTag(String streamReactTag) {
-        // This function _only_ gets called from WebRTCView, in the UI thread.
-        // Hence make sure we run this code in the executor or we run at the risk
-        // of being out of sync.
-        try {
-            return (MediaStream) ThreadUtils
-                    .submitToExecutor((Callable<Object>) () -> {
-                        MediaStream stream = localStreams.get(streamReactTag);
+        MediaStream stream = localStreams.get(streamReactTag);
 
-                        if (stream != null) {
-                            return stream;
-                        }
-
-                        for (int i = 0, size = mPeerConnectionObservers.size(); i < size; i++) {
-                            PeerConnectionObserver pco = mPeerConnectionObservers.valueAt(i);
-                            stream = pco.remoteStreams.get(streamReactTag);
-                            if (stream != null) {
-                                return stream;
-                            }
-                        }
-
-                        return null;
-                    })
-                    .get();
-        } catch (ExecutionException | InterruptedException e) {
-            return null;
+        if (stream != null) {
+            return stream;
         }
+
+        for (int i = 0, size = mPeerConnectionObservers.size(); i < size; i++) {
+            PeerConnectionObserver pco = mPeerConnectionObservers.valueAt(i);
+            stream = pco.remoteStreams.get(streamReactTag);
+            if (stream != null) {
+                return stream;
+            }
+        }
+
+        return null;
     }
 
     public MediaStreamTrack getTrack(int pcId, String trackId) {
@@ -746,7 +761,7 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod(isBlockingSynchronousMethod = true)
-    public void transceiverSetCodecPreferences(int id, String senderId, ReadableArray codecPreferences) {
+    public boolean transceiverSetCodecPreferences(int id, String senderId, ReadableArray codecPreferences) {
         ThreadUtils.runOnExecutor(() -> {
             WritableMap identifier = Arguments.createMap();
             WritableMap params = Arguments.createMap();
@@ -805,11 +820,12 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
                 Log.d(TAG, "transceiverSetCodecPreferences(): " + e.getMessage());
             }
         });
+        return true;
     }
 
     @ReactMethod
-    public void getDisplayMedia(Promise promise) {
-        ThreadUtils.runOnExecutor(() -> getUserMediaImpl.getDisplayMedia(promise));
+    public void getDisplayMedia(ReadableMap constraints, Promise promise) {
+        ThreadUtils.runOnExecutor(() -> getUserMediaImpl.getDisplayMedia(constraints, promise));
     }
 
     @ReactMethod
@@ -980,8 +996,8 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void mediaStreamTrackSetVideoEffect(String id, String name) {
-        ThreadUtils.runOnExecutor(() -> { getUserMediaImpl.setVideoEffect(id, name); });
+    public void mediaStreamTrackSetVideoEffects(String id, ReadableArray names) {
+        ThreadUtils.runOnExecutor(() -> { getUserMediaImpl.setVideoEffects(id, names); });
     }
 
     @ReactMethod
@@ -1317,11 +1333,14 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
                 return;
             }
 
-            IceCandidate candidate = new IceCandidate(
-                candidateMap.hasKey("sdpMid") && !candidateMap.isNull("sdpMid") ? candidateMap.getString("sdpMid")  : "",
-                candidateMap.hasKey("sdpMLineIndex") && !candidateMap.isNull("sdpMLineIndex")  ? candidateMap.getInt("sdpMLineIndex") : 0,
-                candidateMap.getString("candidate"));
-            
+            IceCandidate candidate = new IceCandidate(candidateMap.hasKey("sdpMid") && !candidateMap.isNull("sdpMid")
+                            ? candidateMap.getString("sdpMid")
+                            : "",
+                    candidateMap.hasKey("sdpMLineIndex") && !candidateMap.isNull("sdpMLineIndex")
+                            ? candidateMap.getInt("sdpMLineIndex")
+                            : 0,
+                    candidateMap.getString("candidate"));
+
             peerConnection.addIceCandidate(candidate, new AddIceObserver() {
                 @Override
                 public void onAddSuccess() {
@@ -1454,9 +1473,74 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
         });
     }
 
-    @ReactMethod
-    public void stopMediaProjectionForegroundService() {
-        getUserMediaImpl.stopMediaProjectionForegroundService();
+    public void generateCertificate(ReadableMap options, Promise promise) {
+        ThreadUtils.runOnExecutor(() -> {
+            try {
+                PeerConnection.KeyType keyType = PeerConnection.KeyType.ECDSA;
+                long expires = 2592000L; // Default 30 days
+
+                if (options.hasKey("keyType")) {
+                    String keyTypeStr = options.getString("keyType");
+                    if ("RSA".equals(keyTypeStr)) {
+                        keyType = PeerConnection.KeyType.RSA;
+                    } else if ("ECDSA".equals(keyTypeStr)) {
+                        keyType = PeerConnection.KeyType.ECDSA;
+                    }
+                }
+
+                if (options.hasKey("expires")) {
+                    expires = (long) options.getDouble("expires");
+                }
+
+                RtcCertificatePem cert = RtcCertificatePem.generateCertificate(keyType, expires);
+                String certId = java.util.UUID.randomUUID().toString();
+                synchronized (mCertificates) {
+                    mCertificates.put(certId, cert);
+                }
+
+                WritableMap params = Arguments.createMap();
+                params.putString("certificateId", certId);
+                // Return expires as millis since epoch
+                params.putDouble("expires", System.currentTimeMillis() + expires * 1000);
+
+                // Calculate fingerprints
+                WritableArray fingerprints = Arguments.createArray();
+
+                try {
+                    CertificateFactory cf = CertificateFactory.getInstance("X.509");
+                    ByteArrayInputStream is = new ByteArrayInputStream(cert.certificate.getBytes(StandardCharsets.UTF_8));
+                    X509Certificate x509Cert = (X509Certificate) cf.generateCertificate(is);
+
+                    MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                    byte[] hash = digest.digest(x509Cert.getEncoded());
+
+                    WritableMap fingerprint = Arguments.createMap();
+                    fingerprint.putString("algorithm", "sha-256");
+                    fingerprint.putString("value", bytesToHex(hash));
+                    fingerprints.pushMap(fingerprint);
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to calculate fingerprint: " + e.getMessage());
+                }
+
+                params.putArray("fingerprints", fingerprints);
+
+                promise.resolve(params);
+            } catch (Exception e) {
+                promise.reject(e);
+            }
+        });
+    }
+
+    private String bytesToHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
+            sb.append(":");
+        }
+        if (sb.length() > 0) {
+            sb.setLength(sb.length() - 1);
+        }
+        return sb.toString();
     }
 
     @ReactMethod
@@ -1467,5 +1551,10 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void removeListeners(Integer count) {
         // Keep: Required for RN built in Event Emitter Calls.
+    }
+
+    @ReactMethod
+    public void stopMediaProjectionForegroundService() {
+        getUserMediaImpl.stopMediaProjectionForegroundService();
     }
 }

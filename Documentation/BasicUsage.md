@@ -112,6 +112,22 @@ try {
 };
 ```
 
+### Using Media Constraints on getDisplayMedia (Android Only)
+
+It is possible to use mediaConstraints on getDisplayMedia to restricts the user to capturing the default display using the custom boolean parameter `createConfigForDefaultDisplay`.
+A resolution scale can also be applied using `resolutionScale` parameter. Value is a number between 0 and 1.
+
+This configuration in only available for android, so will you have to add the 'android' key in constraints.
+
+```javascript
+	const displayMediaStreamConstraints = {
+		android: {
+			createConfigForDefaultDisplay: true,
+			resolutionScale: 0.5,
+		},
+	};
+```
+
 ## Destroying the Media Stream
 
 Cycling all of the tracks and stopping them is more than enough to clean up after a call has finished.  
@@ -232,11 +248,9 @@ That will allow you to enable and disable video streams on demand while a call i
 
 ```javascript
 let sessionConstraints = {
-	mandatory: {
-		OfferToReceiveAudio: true,
-		OfferToReceiveVideo: true,
-		VoiceActivityDetection: true
-	}
+	offerToReceiveAudio: true,
+	offerToReceiveVideo: true,
+	voiceActivityDetection: true
 };
 ```
 
@@ -341,6 +355,30 @@ Don't forget, the user facing camera is usually mirrored.
 | objectFit | string | 'contain' | Can be `'contain'` or `'cover'` nothing more or less. | 
 | streamURL | string | 'streamURL' | Required to have an actual video stream rendering. |
 | zOrder | number | 0 | Similar to zIndex. |
+| onDimensionsChange | function | undefined | Callback fired when video dimensions change. Receives event with nativeEvent containing width and height. |
+
+## Handling Video Dimension Changes
+
+You can listen for changes in video dimensions using the onDimensionsChange callback.  
+This is useful for adapting your UI based on the video's aspect ratio or for analytics.
+
+```javascript
+import React, { useState } from 'react';
+
+const [videoDimensions, setVideoDimensions] = useState({ width: 0, height: 0 });
+
+<RTCView
+	mirror={true}
+	objectFit={'cover'}
+	streamURL={localMediaStream.toURL()}
+	zOrder={0}
+	onDimensionsChange={(event) => {
+		const { width, height } = event.nativeEvent;
+		setVideoDimensions({ width, height });
+		console.log(`Video dimensions changed: ${width}x${height}`);
+	}}
+/>
+```
 
 ## Controlling remote audio tracks
 
